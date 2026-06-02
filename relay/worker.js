@@ -6,8 +6,8 @@
 //
 // Then point the CLI at it:  ONVIF_SCAN_RELAY_URL=https://<your-worker>/send
 
-const ALLOWED_DOMAINS = ["visionify.ai"]; // only send to our own people
-const FROM = "Onvif Scan <onboarding@visionify.ai>"; // must be a verified Resend sender
+const ALLOWED_DOMAINS = ["palletvision.ai", "visionify.ai"]; // only send to our own people
+const FROM = "Pallet Vision <support@palletvision.ai>"; // must be a verified Resend sender
 
 export default {
   async fetch(request, env) {

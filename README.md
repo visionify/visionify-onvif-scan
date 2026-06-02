@@ -5,12 +5,28 @@ camera onboarding fast. Find every ONVIF device, connect to each stream, measure
 **real** FPS, grab screenshots, grade image quality, and produce an Excel + HTML report
 you can drop into onboarding. Optionally email it to your team.
 
-## Install
+## Edge machine setup
+
+Run these on the machine that sits on the customer's camera network.
 
 ```bash
+# 1. system deps
+sudo apt update && sudo apt install -y ffmpeg pipx        # Debian/Ubuntu
+#   macOS:  brew install ffmpeg pipx
+
+# 2. install the tool
 pipx install "git+https://github.com/visionify/onvif-scan.git"
-# needs ffmpeg on the host:  brew install ffmpeg   |   apt install ffmpeg
+pipx ensurepath        # then restart the shell so `onvif-scan` is on PATH
+
+# 3. (optional) enable emailing reports — token shared with you separately
+export ONVIF_SCAN_RELAY_TOKEN="<token-shared-separately>"
+
+# 4. verify
+onvif-scan doctor
 ```
+
+The email relay URL is already baked in — no other config needed. Upgrade later with
+`pipx upgrade onvif-scan`.
 
 ## Use
 
@@ -39,6 +55,10 @@ for unattended runs. Credentials stay in memory — nothing is written to disk.
 
 ## Email relay
 
-`--email` POSTs the report to a small serverless relay that holds the Resend key
-server-side. No secrets ever live on the client or in this repo. See `relay/` for the
-~30-line Cloudflare Worker. Set `ONVIF_SCAN_RELAY_URL` to point at your deployment.
+`--email` POSTs the report to a small Cloudflare Worker that holds the Resend key
+server-side — no secrets ever live on an edge machine or in this repo. The relay URL is
+baked in (`onvif_scan/config.py`); the optional shared `ONVIF_SCAN_RELAY_TOKEN` is given
+to operators separately. The recipient allow-list (in `relay/worker.js`) restricts who
+reports can be emailed to. See `relay/README.md` to (re)deploy.
+
+Reports are emailed from `support@palletvision.ai` to allow-listed recipients.

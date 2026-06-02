@@ -5,7 +5,7 @@ import os
 # never on the client. Override at runtime with ONVIF_SCAN_RELAY_URL if needed.
 RELAY_URL = os.environ.get(
     "ONVIF_SCAN_RELAY_URL",
-    "https://onvif-scan-relay.visionify.workers.dev/send",
+    "https://onvif-scan-relay.palletvision.workers.dev/send",
 )
 
 # Optional shared token the relay checks. Set via env so no token value lives in the

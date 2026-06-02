@@ -16,3 +16,7 @@ onvif-scan-*/
 results.json
 devices.txt
 shots/
+
+# wrangler local cache / state
+relay/.wrangler/
+.dev.vars

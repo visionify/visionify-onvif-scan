@@ -1,0 +1,11 @@
+name = "onvif-scan-relay"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Secrets are NOT set here — use `wrangler secret put` so they never touch the repo:
+#   wrangler secret put RESEND_API_KEY
+#   wrangler secret put RELAY_TOKEN        # optional shared token
+
+# Non-secret config can live here if you prefer env vars over editing worker.js:
+# [vars]
+# ALLOWED_DOMAINS = "visionify.ai"
