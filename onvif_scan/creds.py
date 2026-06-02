@@ -10,10 +10,14 @@ from .config import DEFAULT_CREDENTIALS
 class CredentialStore:
     """Holds creds in memory only. Tries known/working creds before prompting."""
 
-    def __init__(self, cli_user: str = "", cli_pass: str = "", no_prompt: bool = False):
+    def __init__(self, cli_user: str = "", cli_pass: str = "", no_prompt: bool = False,
+                 try_defaults: bool = False):
         self.no_prompt = no_prompt
-        # ordered list of (user, pass) to try; CLI-provided first, then a working
-        # credential remembered from a previous camera, then vendor defaults.
+        # Vendor-default spraying is opt-in: hammering wrong passwords at real cameras
+        # is slow and can trip account lockouts. Off by default.
+        self.try_defaults = try_defaults
+        # ordered list of (user, pass) to try; a remembered working credential and any
+        # CLI-provided credential first, then (optionally) vendor defaults.
         self.known: List[Tuple[str, str]] = []
         if cli_user:
             self.known.append((cli_user, cli_pass))
@@ -24,7 +28,8 @@ class CredentialStore:
         if self.last_working:
             out.append(self.last_working)
         out.extend(c for c in self.known if c not in out)
-        out.extend(c for c in DEFAULT_CREDENTIALS if c not in out)
+        if self.try_defaults:
+            out.extend(c for c in DEFAULT_CREDENTIALS if c not in out)
         return out
 
     def remember(self, user: str, password: str) -> None:

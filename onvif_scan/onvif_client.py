@@ -7,14 +7,23 @@ from urllib.parse import urlparse, urlunparse
 from .models import Device, Stream
 
 
-def _onvif_port(device: Device) -> int:
+COMMON_ONVIF_PORTS = [80, 8000, 8080, 2020, 8899, 8081, 8181, 88]
+
+
+def _candidate_ports(device: Device) -> List[int]:
+    """Ordered, de-duplicated list of ports to try ONVIF on."""
+    ports: List[int] = []
     if device.onvif_url:
-        p = urlparse(device.onvif_url)
-        if p.port:
-            return p.port
-    if 80 in device.open_ports:
-        return 80
-    return 80
+        p = urlparse(device.onvif_url).port
+        if p:
+            ports.append(p)
+    for p in device.open_ports:
+        if p in COMMON_ONVIF_PORTS and p not in ports:
+            ports.append(p)
+    for p in (80, 8000):
+        if p not in ports:
+            ports.append(p)
+    return ports
 
 
 def _inject_creds(rtsp_url: str, user: str, password: str) -> str:
@@ -39,7 +48,21 @@ def enumerate_streams(
     except Exception as e:  # pragma: no cover
         return False, [], f"onvif-zeep unavailable: {e}"
 
-    port = _onvif_port(device)
+    # Try each candidate port until one connects. Auth failures stop immediately
+    # (right port, wrong creds); connection/other errors fall through to the next port.
+    last_err = "no onvif port responded"
+    for port in _candidate_ports(device):
+        ok, streams, err = _enumerate_on_port(ONVIFCamera, device, port, user, password)
+        if ok:
+            device.onvif_url = f"http://{device.ip}:{port}/onvif/device_service"
+            return True, streams, None
+        if err == "auth failed":
+            return False, [], "auth failed"
+        last_err = err
+    return False, [], last_err
+
+
+def _enumerate_on_port(ONVIFCamera, device, port, user, password):
     try:
         cam = ONVIFCamera(device.ip, port, user, password)
         info = cam.devicemgmt.GetDeviceInformation()

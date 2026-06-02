@@ -94,10 +94,23 @@ def build_excel(result: ScanResult, wd: Path, out: Path) -> Path:
 
 
 # --------------------------------------------------------------------------- HTML
-def _img_data_uri(path: Path) -> str:
+def _img_data_uri(path: Path, max_width: int = 480) -> str:
+    """Embed a downscaled JPEG so the self-contained HTML stays small enough to email."""
     try:
-        b = path.read_bytes()
-        return "data:image/jpeg;base64," + base64.b64encode(b).decode()
+        import cv2
+        img = cv2.imread(str(path))
+        if img is not None:
+            h, w = img.shape[:2]
+            if w > max_width:
+                img = cv2.resize(img, (max_width, int(h * max_width / w)),
+                                 interpolation=cv2.INTER_AREA)
+            ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if ok:
+                return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
+    except Exception:
+        pass
+    try:
+        return "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()
     except Exception:
         return ""
 

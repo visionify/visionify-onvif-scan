@@ -40,10 +40,10 @@ class Device:
 
     @property
     def status(self) -> str:
-        if self.error or not self.reachable:
-            return "failed"
-        good = [s for s in self.streams if s.error is None and s.quality_score >= 70]
-        usable = [s for s in self.streams if s.error is None]
+        # Working streams are authoritative: if we captured usable streams the device
+        # is usable, even if some non-fatal device-level error was recorded.
+        usable = [s for s in self.streams if s.error is None and s.frames_captured > 0]
+        good = [s for s in usable if s.quality_score >= 70]
         if good:
             return "good"
         if usable:

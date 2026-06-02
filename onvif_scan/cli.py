@@ -102,6 +102,7 @@ def _test_device(dev: Device, creds: CredentialStore, wd: Path,
             creds.remember(user, pw)
             dev.streams = streams
             dev.auth = "ok"
+            dev.error = None
             break
         last_err = err
         if err != "auth failed":
@@ -116,6 +117,7 @@ def _test_device(dev: Device, creds: CredentialStore, wd: Path,
                 creds.remember(*prompted)
                 dev.streams = streams
                 dev.auth = "ok"
+                dev.error = None
             else:
                 last_err = err
 
@@ -138,6 +140,8 @@ def test(
     user: str = typer.Option("", "--user", help="Try this username first."),
     password: str = typer.Option("", "--pass", help="Try this password first."),
     no_prompt: bool = typer.Option(False, "--no-prompt", help="Never prompt for creds."),
+    try_defaults: bool = typer.Option(False, "--try-defaults",
+                                      help="Also try common vendor-default credentials (may trip lockouts)."),
     timeout: int = typer.Option(20, help="Per-stream timeout seconds."),
     workers: int = typer.Option(4, help="Parallel cameras."),
 ):
@@ -148,7 +152,7 @@ def test(
         console.print("[red]ffmpeg not found[/] — run `onvif-scan doctor`")
         raise typer.Exit(1)
 
-    creds = CredentialStore(user, password, no_prompt=no_prompt)
+    creds = CredentialStore(user, password, no_prompt=no_prompt, try_defaults=try_defaults)
     console.print(f"Testing {len(result.devices)} device(s)…")
 
     # NOTE: prompting is interactive, so we test serially when prompts are possible.
