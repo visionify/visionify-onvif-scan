@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+onvif-scan/
+onvif-scan-*/
+*.xlsx
+*.html
+!onvif_scan/templates/*.html
+
+# Run outputs may contain camera credentials in RTSP URLs — never commit them,
+# even from a custom --workdir.
+results.json
+devices.txt
+shots/
