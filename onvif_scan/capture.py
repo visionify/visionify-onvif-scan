@@ -2,13 +2,31 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
+
+# Must be set before OpenCV's ffmpeg backend initializes:
+#  - rtsp_transport;tcp  -> avoids UDP packet reordering/loss ("bad cseq" spam)
+#  - loglevel -8 (quiet) -> silence libav decode/RTP warnings on stderr
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
 
 from .models import Stream
+
+
+def _sanitize_rtsp(url: str) -> str:
+    """Strip credentials from an rtsp URL so they never get drawn onto a screenshot."""
+    try:
+        p = urlparse(url)
+        netloc = p.netloc.split("@")[-1]
+        return urlunparse(p._replace(netloc=netloc))
+    except Exception:
+        return url
 
 
 def ffmpeg_available() -> bool:
@@ -88,13 +106,10 @@ def capture_and_measure(
 
     # 2) capture frames with OpenCV, measure real FPS
     try:
-        import cv2  # noqa
+        import cv2
     except Exception as e:
         stream.error = f"opencv unavailable: {e}"
         return stream
-    import os
-    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
-    import cv2
 
     cap = cv2.VideoCapture(stream.rtsp_url, cv2.CAP_FFMPEG)
     if not cap.isOpened():
@@ -102,9 +117,8 @@ def capture_and_measure(
         cap.release()
         return stream
 
-    saved = 0
     grabbed = 0
-    sample_frames = []
+    sample_frames = []  # raw frames held in memory; written after metrics are known
     start = time.monotonic()
     deadline = start + timeout
     save_at = set()
@@ -117,16 +131,8 @@ def capture_and_measure(
         if not ok:
             break
         grabbed += 1
-        if grabbed in save_at and saved < shots:
-            name = f"{ip}_{_safe_name(stream.profile)}_{saved + 1}.jpg"
-            path = shots_dir / name
-            try:
-                cv2.imwrite(str(path), frame)
-                stream.screenshots.append(f"shots/{name}")
-                saved += 1
-                sample_frames.append(frame)
-            except Exception:
-                pass
+        if grabbed in save_at and len(sample_frames) < shots:
+            sample_frames.append(frame.copy())
     elapsed = time.monotonic() - start
     cap.release()
 
@@ -137,10 +143,50 @@ def capture_and_measure(
         stream.error = "no frames received"
         return stream
 
-    # 3) quality scoring on a sample frame
+    # 3) score quality on a raw frame, then annotate + save screenshots with the
+    #    now-known metrics (measured FPS isn't available until after the loop).
     if sample_frames:
         _score_quality(stream, sample_frames[0])
+        for i, frame in enumerate(sample_frames):
+            name = f"{ip}_{_safe_name(stream.profile)}_{i + 1}.jpg"
+            try:
+                annotated = _annotate(frame, stream, ip)
+                cv2.imwrite(str(shots_dir / name), annotated)
+                stream.screenshots.append(f"shots/{name}")
+            except Exception:
+                pass
     return stream
+
+
+def _annotate(frame, stream: Stream, ip: str):
+    """Burn key metrics onto the screenshot for at-a-glance review in the report/email."""
+    import cv2
+
+    img = frame.copy()
+    h, w = img.shape[:2]
+    lines = [
+        f"{ip}   {stream.profile}",
+        f"Resolution: {stream.resolution or '-'}    Codec: {stream.codec or '-'}",
+        f"FPS advertised: {stream.fps_advertised or '-'}    measured: {stream.fps_measured or '-'}",
+        f"Bitrate: {stream.bitrate_kbps or '-'} kbps    Quality: {stream.quality_score}/100",
+        f"RTSP: {_sanitize_rtsp(stream.rtsp_url)}",
+    ]
+    scale = min(2.0, max(0.5, w / 1280.0))
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fs = 0.55 * scale
+    thick = max(1, int(round(scale)))
+    pad = int(10 * scale)
+    line_h = int(30 * scale)
+    box_h = pad * 2 + line_h * len(lines)
+
+    overlay = img.copy()
+    cv2.rectangle(overlay, (0, 0), (w, box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, img, 0.45, 0, img)
+    y = pad + int(line_h * 0.75)
+    for ln in lines:
+        cv2.putText(img, ln, (pad, y), font, fs, (255, 255, 255), thick, cv2.LINE_AA)
+        y += line_h
+    return img
 
 
 def _score_quality(stream: Stream, frame) -> None:
